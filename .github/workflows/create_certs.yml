@@ -60,10 +60,36 @@ jobs:
         id: check_certs
 
       - name: Set output and annotations based on Fastlane result
-        id: set_output
-        run: |
-          CERT_STATUS_FILE="${{ github.workspace }}/fastlane/new_certificate_needed.txt"
-          ENABLE_NUKE_CERTS=${{ vars.ENABLE_NUKE_CERTS }}
+  id: set_output
+  env:
+    ENABLE_NUKE_CERTS: ${{ vars.ENABLE_NUKE_CERTS }}
+    FORCE_NUKE_CERTS: ${{ vars.FORCE_NUKE_CERTS }}
+  run: |
+    CERT_STATUS_FILE="${{ github.workspace }}/fastlane/new_certificate_needed.txt"
+
+    CERT_STATUS="false"
+    if [ -f "$CERT_STATUS_FILE" ]; then
+      CERT_STATUS=$(cat "$CERT_STATUS_FILE" | tr -d '\n' | tr -d '\r')
+      echo "new_certificate_needed: $CERT_STATUS"
+      echo "new_certificate_needed=$CERT_STATUS" >> "$GITHUB_OUTPUT"
+    else
+      echo "Certificate status file not found. Defaulting to false."
+      echo "new_certificate_needed=false" >> "$GITHUB_OUTPUT"
+    fi
+
+    if [ "$CERT_STATUS" != "true" ] && [ "$ENABLE_NUKE_CERTS" != "true" ]; then
+      echo "::notice::🔔 Automated renewal of certificates is disabled because ENABLE_NUKE_CERTS is not set to 'true'."
+    fi
+
+    if [ "$CERT_STATUS" = "true" ] && [ "$ENABLE_NUKE_CERTS" != "true" ]; then
+      echo "::error::❌ No valid distribution certificate found. Automated renewal was skipped because ENABLE_NUKE_CERTS is not set to 'true'."
+      exit 1
+    fi
+
+    if [ "$FORCE_NUKE_CERTS" = "true" ]; then
+      echo "::warning::‼️ Nuking of certificates was forced because FORCE_NUKE_CERTS is set to 'true'."
+    fi
+
           
           if [ -f "$CERT_STATUS_FILE" ]; then
             CERT_STATUS=$(cat "$CERT_STATUS_FILE" | tr -d '\n' | tr -d '\r') # Read file content and strip newlines
